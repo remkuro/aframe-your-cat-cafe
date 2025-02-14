@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- To remove 404 Error -->
+    <link rel="shortcut icon" href=""> 
+    <!-- File for Default AFrame -->
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <!-- File for IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+    <!-- File for Environment -->
+    <script src="https://unpkg.com/aframe-environment-component@1.3.2/dist/aframe-environment-component.min.js"></script>
+    <!-- File for Animation Mixer -->
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.0.1/dist/aframe-extras.min.js"></script>
+    <!-- External Files for Modeling and Animaations -->
+    <script src="fplayer.js"></script>
+
+    <!-- Client for Web Server-->
+    <script>
+      let my_id, my_gender, scene, camera, fplayerTemplate, mplayerTemplate, socket;
+      let players = {}; // Store all players in this object
+      let rnd = (l, u) => Math.floor(Math.random() * (u - l) + l); // Random number generator
+  
+      window.onload = function () {
+          console.log("Game loading...");
+          my_id = prompt("Enter Name: ");
+          my_gender = prompt("Enter a gender (M/F): ");
+          scene = document.querySelector("a-scene");
+          camera = document.querySelector("a-camera");
+          fplayerTemplate = document.querySelector("#fplayerTemplate");
+          mplayerTemplate = document.querySelector("#mplayerTemplate");
+  
+          // Connect to the server
+          socket = io.connect(`http://127.0.0.1:5001`, {
+              query: { player_id: my_id, gender: my_gender },
+          });
+          console.log("Connected to server.");
+  
+          // Listen for player updates from the server
+          socket.on("players", function (info) {
+              updatePlayers(info);
+          });
+  
+          // Start the game loop
+          loop();
+      };
+  
+        function updatePosition() {
+          // Emit the player's position and rotation to the server
+          camera.object3D.position.y = 1.5; //player's camera is above the model
+          let info = {
+              id: my_id,
+              gender: my_gender,
+              x: camera.object3D.position.x,
+              y: 0, //player's model is glued to the floor only if its an a-shape
+              z: camera.object3D.position.z,
+              angleY: camera.object3D.rotation.y,
+              angleX: camera.object3D.rotation.x,
+          };
+          socket.emit("players", info);
+
+
+        }
+        function createPlayer(id, gender) {
+          let clone;
+          if (gender === "F" || gender === "f") {
+              clone = fplayerTemplate.cloneNode(true);
+          } else if (gender === "M" || gender === "m") {
+              clone = mplayerTemplate.cloneNode(true);
+          } else {
+              console.warn(`${gender} is an invalid gender for player ${id}. Defaulting to F.`);
+              clone = fplayerTemplate.cloneNode(true);
+          }
+
+          // Set position and label
+          // camera = document.createElement("a-camera");
+          // clone.append(camera);
+          // clone = mplayerTemplate.cloneNode(true); //fplayerTemplate won't work
+          // clone.setAttribute("color","yellow");
+          // clone.setAttribute("position",{x:-800, y:y, z:0}); this won't work because the socket will override this 
+       
+          let textElement = clone.querySelector("a-text");
+          textElement.setAttribute("value", id);
+
+          // Reinitialize animation-mixer
+          // const gltfModel = clone.querySelector("a-gltf-model");
+          // gltfModel.addEventListener("model-loaded", () => {
+          //   gltfModel.setAttribute("animation-mixer", ""); // Reinitialize animation-mixer
+          //   console.log(`Animation mixer initialized for ${id}`);
+          // });
+
+          // Manually trigger model-loaded for the cloned entity
+          // setTimeout(() => {
+          //     const mesh = gltfModel.getObject3D("mesh");
+          //     if (mesh) {
+          //         gltfModel.emit("model-loaded", { detail: { model: mesh } });
+          //     }
+          // }, 0);
+          // Add event listeners for animation switching
+          // clone.addEventListener("playerMoveStart", () => {
+          //     console.log(`Player ${id} started moving.`);
+          //     switchToWalking(clone);
+          // });
+
+          // clone.addEventListener("playerMoveStop", () => {
+          //     console.log(`Player ${id} stopped moving.`);
+          //     switchToIdle(clone);
+          // });
+          // console.log(`Animation-mixer present:`, gltfModel.hasAttribute("animation-mixer"));
+          // console.log(`Created player model for ${id} at random position.`);
+
+          // clone.setAttribute("raycastar", "[object]:interact");
+          return clone;
+
+          
+          
+        }
+        function switchToIdle(playerObj) {
+          const gltfModel = playerObj.querySelector("a-gltf-model"); // Access the <a-gltf-model>
+          const mixer = gltfModel?.components["animation-mixer"]?.mixer;
+          if (mixer) {
+            mixer.clipAction("NlaTrack").play(); // Play Idle
+            mixer.clipAction("NlaTrack.001").stop(); // Stop Walk
+            console.log("Idle animation triggered.");
+          } else {
+            console.warn("Animation mixer not found for idle:", playerObj);
+          }
+        }
+
+        function switchToWalking(playerObj) {
+          const gltfModel = playerObj.querySelector("a-gltf-model"); // Access the <a-gltf-model>
+          const mixer = gltfModel?.components["animation-mixer"]?.mixer;
+          if (mixer) {
+            mixer.clipAction("NlaTrack.001").play(); // Play Walk
+            mixer.clipAction("NlaTrack").stop(); // Stop Idle
+            console.log("Walking animation triggered.");
+          } else {
+            console.warn("Animation mixer not found for walking:", playerObj);
+          }
+        }
+        function updatePlayers(info) {
+          for (let pid in info) {
+              let data = info[pid];
+              if (players[data.id]) {
+                // Update existing player's position and rotation
+                const player = players[data.id];
+                const prevPosition = player.prevPosition || { x: player.x, z: player.z };
+
+                player.x = data.x;
+                player.y = data.y;
+                player.z = data.z;
+                player.angleY = data.angleY;
+
+                // Calculate movement distance
+                const distanceMoved = Math.sqrt(
+                    Math.pow(data.x - prevPosition.x, 2) + Math.pow(data.z - prevPosition.z, 2)
+                );
+
+                // Trigger movement events
+                if (distanceMoved > 0.01 && !player.isMoving) {
+                    player.obj.dispatchEvent(new Event("playerMoveStart"));
+                    player.isMoving = true;
+                } else if (distanceMoved <= 0.01 && player.isMoving) {
+                    player.obj.dispatchEvent(new Event("playerMoveStop"));
+                    player.isMoving = false;
+                }
+
+                // Update previous position
+                player.prevPosition = { x: data.x, y: data.y, z: data.z };
+
+                // Update player's position in the scene
+                player.obj.setAttribute("position", { x: player.x, y: player.y, z: player.z });
+                player.obj.setAttribute("rotation", { x: 0, y: THREE.Math.radToDeg(player.angleY), z: 0 });
+                } else {
+                // Create a new player model and add it to the scene
+                players[data.id] = {
+                    id: data.id,
+                    gender: data.gender,
+                    x: data.x,
+                    y: data.y,
+                    z: data.z,
+                    angleY: data.angleY,
+                    obj: createPlayer(data.id, data.gender),
+                    isMoving: false, // Add a movement flag
+                };
+
+                // Only append other players' models (not your own)
+                if (data.id !== my_id) {
+                    scene.append(players[data.id].obj);
+                }
+                console.log(`Player ${data.id} joined.`);
+            }
+          }
+        }
+
+        function loop() {
+          updatePosition();
+          setTimeout(loop, 50); // Adjust update frequency as needed
+        }
+  </script>
+  
+    <!-- Function to find Animation Clips  -->
+    <!-- <script>  
+       AFRAME.registerComponent('log-clips', {
+        init: function () {
+          this.el.addEventListener('model-loaded', evt => {
+            const model = this.el.getObject3D('mesh');
+            if (model && model.animations) {
+              console.log('Available clips:', model.animations.map(a => a.name));
+            } else {
+              console.warn('No animations found or model not loaded properly.');
+            }
+          });
+        }
+      });
+    </script> -->
+    
+  </head>
+
+  <body>
+    <a-scene stats>
+      <a-assets>
+        <a-assets-item id="fplayer" src="http://127.0.0.1:8000/Retro_Survivors/Female Survivor 1 .glb"></a-assets-item>
+        <a-assets-item id="mplayer" src="http://127.0.0.1:8000/Retro_Survivors/Male Survivor 2 .glb"></a-assets-item>
+        <a-assets-item id="cafe" src="the_cat_cafe/scene.gltf"></a-assets-item>
+        <a-assets-item id="cat_player" src="cat_player/scene.gltf"></a-assets-item>
+      </a-assets>
+      <a-gltf-model src="#cafe" position="0 0 0" rotation="180 90 180"></a-gltf-model>
+      <a-entity id="fplayerTemplate" position="0 0 0">
+          <a-gltf-model side="double" src="#cat_player" log-clips animation-mixer  rotation="0 180 0" scale ="0.2 0.2 0.2">
+            <a-sphere scale="" position="0 -15 0">
+              <a-text value=" " scale ="10 10 10" color="black" side="double" position="-1.5 25 0" rotation="0 0 0"></a-text>
+            </a-sphere>
+          </a-gltf-model>
+
+      </a-entity>
+      
+      <a-entity id="mplayerTemplate" position="0 0 0">
+        <a-gltf-model side="double" src="#cat_player" log-clips animation-mixer scale =".3 .3 .3"  rotation="0 180 0">
+        <a-sphere scale="" position="0 -15 0">
+          <a-text value=" " scale ="10 10 10" color="black" side="double" position="-1.5 25 0" rotation="0 0 0"></a-text>
+        </a-sphere>
+        </a-gltf-model>
+    </a-entity>
+      <!-- <a-gltf-model id="mplayerTemplate" src="Retro_Survivors/Male Survivor 1 .glb" log-clips animation-mixer position="0 1 0" scale =".1 .1 .1"><a-gltf-model>
+      <a-gltf-model src="Retro_Survivors/Female Survivor 1 .glb" animation-mixer="clip: NlaTrack.001" position="3 1 0" scale =".1 .1 .1"></a-gltf-model>
+      <a-gltf-model src="Retro_Survivors/Female Survivor 1 .glb" animation-mixer="clip: NlaTrack.002" position="5 1 0" scale =".1 .1 .1"></a-gltf-model>
+      <a-gltf-model src="Retro_Survivors/Female Survivor 1 .glb" animation-mixer="clip: NlaTrack.003" position="8 1 0" scale =".1 .1 .1"></a-gltf-model>
+      <a-gltf-model src="Retro_Survivors/Female Survivor 1 .glb" animation-mixer="clip: NlaTrack.004" position="11 1 0" scale =".1 .1 .1"></a-gltf-model>
+      <a-sky color="cyan"></a-sky> -->
+      <a-plane color="gray" rotation="-90 0 0" width="50" height="50" position="0 0 0"></a-plane>
+      <a-camera>
+        <a-cursor></a-cursor>  
+      </a-camera>
+      <!-- <a-entity environment="preset: arches" width="1000"></a-environment> -->
+    </a-scene>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Realistic Animated Walking Cat 3D Model
+* source:	https://sketchfab.com/3d-models/realistic-animated-walking-cat-3d-model-92d8b9c4a33b4456ae6e066d85b9a04c
+* author:	burgeonitsolutions (https://sketchfab.com/burgeonitsolutions)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. No commercial use.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Realistic Animated Walking Cat 3D Model" (https://sketchfab.com/3d-models/realistic-animated-walking-cat-3d-model-92d8b9c4a33b4456ae6e066d85b9a04c) by burgeonitsolutions (https://sketchfab.com/burgeonitsolutions) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
